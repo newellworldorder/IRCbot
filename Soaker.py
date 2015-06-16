@@ -36,6 +36,7 @@ def confirm(self,Log):
         self.PRIVMSG(Log['context'],'Sorry %s, nobody is active! Returning tip.' % tipper)
             
 def Handler(self,Log):
+    if len(Log['trail']) < 2: return
     if Log['trail'][0].lower() == '!tip' and Log['trail'][1].lower() == self.info['NICK'].lower():
         tip(self,Log)
     elif Log['nick'] == 'Doger' and len(Log['trail']) > 6 and Log['trail'][0] == 'Such' and Log['trail'][6].rstrip('!').lower() == self.info['NICK'].lower():
