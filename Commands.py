@@ -31,42 +31,45 @@ commands['!activelist'] = activelist
 
 def reddit(self,Log):
     if not self.redditEnabled:
-        self.redditAPI()
+        redditAPI(self)
     else:
-        r = self.r
-        redditItem = Log['trail'][1]
-        if (len(Log['trail']) > 2 and Log['trail'][2].lower() != 'user') or len(Log['trail']) < 3:
-            sub = None
-            nsfwstatus = ''
-            if len(Log['trail']) > 2:
-                category = Log['trail'][2].lower()
-                if category == 'controversial':
-                    s = r.get_subreddit(redditItem.lower()).get_controversial(limit=1)
-                elif category == 'hot':
-                    s = r.get_subreddit(redditItem.lower()).get_hot(limit=1)
-                elif category == 'new':
-                    s = r.get_subreddit(redditItem.lower()).get_new(limit=1)
-                elif category == 'random':
+        try:
+            r = self.r
+            redditItem = Log['trail'][1]
+            if (len(Log['trail']) > 2 and Log['trail'][2].lower() != 'user') or len(Log['trail']) < 3:
+                sub = None
+                nsfwstatus = ''
+                if len(Log['trail']) > 2:
+                    category = Log['trail'][2].lower()
+                    if category == 'controversial':
+                        s = r.get_subreddit(redditItem.lower()).get_controversial(limit=1)
+                    elif category == 'hot':
+                        s = r.get_subreddit(redditItem.lower()).get_hot(limit=1)
+                    elif category == 'new':
+                        s = r.get_subreddit(redditItem.lower()).get_new(limit=1)
+                    elif category == 'random':
+                        sub = r.get_subreddit(redditItem.lower()).get_random_submission()
+                    elif category == 'rising':
+                        s = r.get_subreddit(redditItem.lower()).get_rising(limit=1)
+                    elif category == 'search' and len(Log['trail']) > 3:
+                        s = r.get_subreddit(redditItem.lower()).search('+'.join(Log['trail'][3:]),limit=1)
+                    elif category == 'top':
+                        s = r.get_subreddit(redditItem.lower()).get_top(limit=1)
+                else:
                     sub = r.get_subreddit(redditItem.lower()).get_random_submission()
-                elif category == 'rising':
-                    s = r.get_subreddit(redditItem.lower()).get_rising(limit=1)
-                elif category == 'search' and len(Log['trail']) > 3:
-                    s = r.get_subreddit(redditItem.lower()).search('+'.join(Log['trail'][3:]),limit=1)
-                elif category == 'top':
-                    s = r.get_subreddit(redditItem.lower()).get_top(limit=1)
-            else:
-                sub = r.get_subreddit(redditItem.lower()).get_random_submission()
-            if not sub:
-                sub = next(s)
-            if sub.over_18:
-                nsfwstatus = 'NSFW '
-            self.PRIVMSG(Log['context'],'07Reddit 04%s10%s - 12%s 14( %s )' % (nsfwstatus, sub.subreddit.url, sub.title, sub.url))
-        elif (len(Log['trail']) > 2 and Log['trail'][2].lower() == 'user'):
-            try:
-                user = r.get_redditor(redditItem)
-                self.PRIVMSG(Log['context'],'07Reddit 10%s 14( %s )' % (user.name, user._url))
-            except:
-                self.PRIVMSG(Log['context'],'Reddit user \'%s\' does not exist.' % (redditItem))
+                if not sub:
+                    sub = next(s)
+                if sub.over_18:
+                    nsfwstatus = 'NSFW '
+                self.PRIVMSG(Log['context'],'07Reddit 04%s10%s - 12%s 14( %s )' % (nsfwstatus, sub.subreddit.url, sub.title, sub.url))
+            elif (len(Log['trail']) > 2 and Log['trail'][2].lower() == 'user'):
+                try:
+                    user = r.get_redditor(redditItem)
+                    self.PRIVMSG(Log['context'],'07Reddit 10%s 14( %s )' % (user.name, user._url))
+                except:
+                    self.PRIVMSG(Log['context'],'Reddit user \'%s\' does not exist.' % (redditItem))
+        except:
+            pass
 commands['!reddit'] = reddit
 
 def ud(self,Log):
