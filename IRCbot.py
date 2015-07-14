@@ -117,11 +117,12 @@ class IRC:
 
                 # parses WHOIS result
                 if (str(Log['command']) == '330' or str(Log['command']) == '354') and len(Log['parameters']) > 2:
-                    if Log['parameters'][2] not in self.userDict:
-                        self.userDict[Log['parameters'][2]] = []
-                    if Log['parameters'][1] not in self.userDict[Log['parameters'][2]] and Log['parameters'][1] != self.info['NICK']:
-                        self.userDict[Log['parameters'][2]].append(Log['parameters'][1])
-                    self.updateFile()
+                    if Log['parameters'][2] != str(0):
+                        if Log['parameters'][2] not in self.userDict:
+                            self.userDict[Log['parameters'][2]] = []
+                        if Log['parameters'][1] not in self.userDict[Log['parameters'][2]] and Log['parameters'][1] != self.info['NICK']:
+                            self.userDict[Log['parameters'][2]].append(Log['parameters'][1])
+                        self.updateFile()
                     continue
 
                 # updates active list if user leaves
