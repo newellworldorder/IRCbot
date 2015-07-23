@@ -102,6 +102,10 @@ class IRC:
                     if Log['nick'] == self.info['NICK']:
                         self.info['NICK'] = Log['trail'][0]
                     else:
+                        for channels in self.info['CHAN']:
+                            if Log['nick'] in self.activeDict[channels]:
+                                self.activeDict[channels][Log['trail'][0]] = self.activeDict[channels][Log['nick']]
+                                del self.activeDict[channels][Log['nick']]
                         self.ircSend('WHOIS %s' % Log['trail'][0])
                     continue
 
