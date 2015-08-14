@@ -143,27 +143,38 @@ commands['!about'] = about
 def list_(self, Log):
     if Log['host'] in self.info['OWNER'] + self.info['SUDOER']:
         try:
+            changed = []
             if Log['trail'][2].lower() == 'add':
                 for item in Log['trail'][3:]:
                     if item not in self.info[Log['trail'][1].upper()]:
                         self.info[Log['trail'][1].upper()].append(item)
+                        changed.append(item)
                         if Log['trail'][1].upper() == 'CHAN':
                             self.ircSend('JOIN %s' % item)
+                if len(changed) > 0:
+                    self.ircSend('NOTICE %s :%s added to list: %s' % (Log['nick'], str(changed).strip('[]'), Log['trail'][1].upper()))
+                else:
+                    self.ircSend('NOTICE %s :Nothing was added to list: %s' % (Log['nick'], Log['trail'][1].upper()))
             elif Log['trail'][2].lower() == 'remove':
                 for item in Log['trail'][3:]:
                     if item in self.info[Log['trail'][1].upper()]:
                         self.info[Log['trail'][1].upper()].remove(item)
+                        changed.append(item)
                         if Log['trail'][1].upper() == 'CHAN':
                             self.ircSend('PART %s' % item)
+                if len(changed) > 0:
+                    self.ircSend('NOTICE %s :%s removed from list: %s' % (Log['nick'], str(changed).strip('[]'), Log['trail'][1].upper()))
+                else:
+                    self.ircSend('NOTICE %s :Nothing was removed from list: %s' % (Log['nick'], Log['trail'][1].upper()))
             self.updateFile()
         except KeyError:
-            self.ircSend('NOTICE %s :Requested field does not exist' % Log['nick'])
+            self.ircSend('NOTICE %s :Command invalid, please use !list <list> <add/remove> <items>' % Log['nick'])
     else:
         self.ircSend('NOTICE %s :You are not authorized to perform that command' % Log['nick'])
 commands['!list'] = list_
 
 def Handler(self,Log):
-    if Log['trail'][0].lower() in commands.keys():
+    if Log['nick'].lower() not in [x.lower() for x in self.info['IGNORE']] and Log['trail'][0].lower() in commands.keys():
         try:
             commands[Log['trail'][0].lower()](self,Log)
         except IndexError:
