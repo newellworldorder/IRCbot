@@ -32,6 +32,7 @@ def setup():
         conf['IGNORE'] = input("Enter the nicks that the bot should ignore (comma separated): ").split(',')
         conf['OWNER'] = input("Enter the hosts of the owner(s) (comma separated): ").split(',')
         conf['SUDOER'] = input("Enter the hosts to receive extra privileges (comma separated): ").split(',')
+        conf['UNLOAD'] = {}
         confirm = input("\n Confirm? y/N: ")
         if 'y' in confirm.lower():
             unconfirmed = False

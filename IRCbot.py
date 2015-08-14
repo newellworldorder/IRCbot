@@ -2,7 +2,7 @@
 
 from bs4 import BeautifulSoup
 from operator import itemgetter
-import base64, Commands, Config, Logger, praw, re, requests, Soaker, socket, ssl, time, URLInfo
+import base64, Commands, Config, importlib, Logger, praw, re, requests, Soaker, socket, ssl, time, types, URLInfo
 
 class IRC:
     def __init__(self):
@@ -143,7 +143,9 @@ class IRC:
                 # checks when PRIVMSG received
                 if Log['command'] == 'PRIVMSG':
                     Log['context'] = Log['parameters'][0]
-
+                    if Log['context'] not in self.info['UNLOAD'].keys():
+                        self.info['UNLOAD'][Log['context']] = []
+                    
                     # builds last spoke list
                     if Log['context'] not in self.activeDict:
                         self.activeDict[Log['context']] = {}
@@ -154,11 +156,44 @@ class IRC:
                     if Log['nick'] not in validList and Log['cap'] == '+':
                         self.ircSend('WHOIS %s' % Log['nick'])
 
-                    Soaker.Handler(self, Log)
+                    if Log['host'] in self.info['OWNER'] + self.info['SUDOER']:
+                        if len(Log['trail']) > 1:
+                            def imports():
+                                for name, val in globals().items():
+                                    if isinstance(val, types.ModuleType):
+                                        yield val.__name__
+                            try:
+                                module = __import__(Log['trail'][1])
+                                if Log['trail'][0].lower() == '!load':
+                                    if Log['trail'][1] in self.info['UNLOAD'][Log['context']]:
+                                        self.info['UNLOAD'][Log['context']].remove(Log['trail'][1])
+                                        self.PRIVMSG(Log['context'],'Module \'%s\' loaded' % Log['trail'][1])
+                                        
+                                if Log['trail'][0].lower() == '!unload':
+                                    if Log['trail'][1] in list(imports()) and Log['trail'][1] not in self.info['UNLOAD'][Log['context']]:
+                                        self.info['UNLOAD'][Log['context']].append(Log['trail'][1])
+                                        self.PRIVMSG(Log['context'],'Module \'%s\' unloaded' % Log['trail'][1])
+                                        self.updateFile()
 
-                    Commands.Handler(self, Log)
+                                if Log['trail'][0].lower() == '!reload':
+                                    if Log['trail'][1] in list(imports()):
+                                        importlib.reload(module)
+                                        self.PRIVMSG(Log['context'],'Module \'%s\' reloaded' % Log['trail'][1])
+                            except Exception as e:
+                                print(e)
 
-                    URLInfo.Handler(self, Log)
+                        if Log['trail'][0] == '!quit':
+                            self.ircSend('QUIT')
+                            sys.exit('User exited')
+
+                    if 'Soaker' not in self.info['UNLOAD'][Log['context']]:
+                        Soaker.Handler(self, Log)
+                        
+                    if 'Commands' not in self.info['UNLOAD'][Log['context']]:
+                        Commands.Handler(self, Log)
+                    
+                    if 'URLInfo' not in self.info['UNLOAD'][Log['context']]:
+                        URLInfo.Handler(self, Log)
 
     def updateFile(self):
         with open('nwobot.conf', 'r') as file:
