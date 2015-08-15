@@ -163,7 +163,6 @@ class IRC:
                                     if isinstance(val, types.ModuleType):
                                         yield val.__name__
                             try:
-                                module = __import__(Log['trail'][1])
                                 if Log['trail'][0].lower() == '!load':
                                     if Log['trail'][1] in self.info['UNLOAD'][Log['context']]:
                                         self.info['UNLOAD'][Log['context']].remove(Log['trail'][1])
@@ -176,6 +175,9 @@ class IRC:
                                         self.updateFile()
 
                                 if Log['trail'][0].lower() == '!reload':
+                                    module = __import__(Log['trail'][1])
+                                    if Log['trail'][1] == 'IRCbot':
+                                        self.ircSend('QUIT')
                                     if Log['trail'][1] in list(imports()):
                                         importlib.reload(module)
                                         self.PRIVMSG(Log['context'],'Module \'%s\' reloaded' % Log['trail'][1])
