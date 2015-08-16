@@ -22,7 +22,7 @@ def confirm(self,Log):
     tipper = Log['trail'][1]
     soakopt = self.soakOptionQueue.pop(0)
     initAmount = int(Log['trail'][4][1:])
-    activeUser = self.listActive(Log['context'],10,tipper,soakopt['all'],soakopt['exclude'])
+    activeUser = self.listActive(Log['context'],self.fLog,10,tipper,soakopt['all'],soakopt['exclude'])
     if len(activeUser) > 0:
         tipAmount = initAmount // len(activeUser)
         if tipAmount >= 10:
@@ -36,8 +36,7 @@ def confirm(self,Log):
         self.PRIVMSG(Log['context'],'Sorry %s, nobody is active! Returning tip.' % tipper)
             
 def Handler(self,Log):
-    if len(Log['trail']) < 2: return
-    if Log['trail'][0].lower() == '!tip' and Log['trail'][1].lower() == self.info['NICK'].lower():
+    if len(Log['trail']) > 1 and Log['trail'][0].lower() == '!tip' and Log['trail'][1].lower() == self.info['NICK'].lower():
         tip(self,Log)
-    elif Log['nick'] == 'Doger' and len(Log['trail']) > 6 and Log['trail'][0] == 'Such' and Log['trail'][6].rstrip('!').lower() == self.info['NICK'].lower():
+    elif len(Log['trail']) > 6 and Log['nick'] == 'Doger' and Log['trail'][0] == 'Such' and Log['trail'][6].rstrip('!').lower() == self.info['NICK'].lower():
         confirm(self,Log)

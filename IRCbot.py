@@ -13,6 +13,7 @@ class IRC:
         Commands.redditAPI(self)
         Soaker.Soaker(self)
         self.Connect()
+        self.fLog = {}
         self.Main()
 
     def Connect(self):
@@ -45,6 +46,7 @@ class IRC:
                     continue
 
                 Log = Logger.interpret(line)
+                fLog[Log['time']] = Log
 
                 # reply to pings
                 if Log['command'] == 'PING':
@@ -142,7 +144,6 @@ class IRC:
 
                 # checks when PRIVMSG received
                 if Log['command'] == 'PRIVMSG':
-                    Log['context'] = Log['parameters'][0]
                     if Log['context'] not in self.info['UNLOAD'].keys():
                         self.info['UNLOAD'][Log['context']] = []
                     
@@ -178,6 +179,7 @@ class IRC:
                                     module = __import__(Log['trail'][1])
                                     if Log['trail'][1] == 'IRCbot':
                                         self.ircSend('QUIT')
+                                        self.irc.close()
                                     if Log['trail'][1] in list(imports()):
                                         importlib.reload(module)
                                         self.PRIVMSG(Log['context'],'Module \'%s\' reloaded' % Log['trail'][1])
@@ -186,6 +188,7 @@ class IRC:
 
                         if Log['trail'][0] == '!quit':
                             self.ircSend('QUIT')
+                            self.irc.close()
                             sys.exit('User exited')
 
                     if 'Soaker' not in self.info['UNLOAD'][Log['context']]:
@@ -210,28 +213,7 @@ class IRC:
                 file.write(str(self.userDict))
 
     def listActive(self, chan, minutes = 10, caller = None, full = False, exclude = []):
-        activeList = []
-        validList = []
-        timenow = time.time()
-        userDict = list(self.userDict)
-        mostRecent = list(dict(sorted(self.activeDict[chan].items(), key = itemgetter(1), reverse = True)).keys())
-        for group in userDict:
-            nickList = self.userDict[group]
-            if caller != None and caller in nickList:
-                userDict.remove(group)
-                break
-        for rnick in mostRecent:
-            for group in userDict:
-                nickList = self.userDict[group]
-                for unick in nickList:
-                    if rnick == unick:
-                        validList.append(rnick)
-                        userDict.remove(group)
-                        break
-        for key in validList:
-            if key not in self.info['IGNORE'] and key != self.info['NICK'] and key not in exclude and (timenow - self.activeDict[chan][key] <= minutes * 60 or full):
-                    activeList.append(key)
-        return activeList
+        return Logger.listActive(self, chan, minutes, caller, full, exclude)
 
     def PRIVMSG(self, context, message):
         self.ircSend('PRIVMSG %s :%s' % (context, message))
