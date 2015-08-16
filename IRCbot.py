@@ -2,7 +2,7 @@
 
 from bs4 import BeautifulSoup
 from operator import itemgetter
-import base64, Commands, Config, importlib, Logger, praw, re, requests, Soaker, socket, ssl, time, types, URLInfo
+import base64, Commands, Config, importlib, Logger, praw, re, requests, Soaker, socket, ssl, sys, time, types, URLInfo
 
 class IRC:
     def __init__(self):
@@ -46,7 +46,7 @@ class IRC:
                     continue
 
                 Log = Logger.interpret(line)
-                fLog[Log['time']] = Log
+                self.fLog[Log['time']] = Log
 
                 # reply to pings
                 if Log['command'] == 'PING':
@@ -214,6 +214,8 @@ class IRC:
 
     def listActive(self, chan, minutes = 10, caller = None, full = False, exclude = []):
         return Logger.listActive(self, chan, minutes, caller, full, exclude)
+
+    current_milli_time = lambda: int(round(time.time() * 1000))
 
     def PRIVMSG(self, context, message):
         self.ircSend('PRIVMSG %s :%s' % (context, message))

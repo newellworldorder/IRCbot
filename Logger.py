@@ -2,14 +2,18 @@
 
 import time
 
+def current_milli_time():
+    return int(round(time.time() * 1000))
+
 def interpret(line):
+    t = time.time()
     Log = {}
     Log['line'] = line
-    Log['time'] = lambda: int(round(time.time() * 1000))
-    Log['nick'] = ''
-    Log['ident'] = ''
-    Log['host'] = ''
-    Log['command'] = ''
+    Log['time'] = current_milli_time()
+    Log['nick'] = None
+    Log['ident'] = None
+    Log['host'] = None
+    Log['command'] = None
     Log['parameters'] = []
     Log['cap'] = ''
     Log['trail'] = []
@@ -34,36 +38,37 @@ def interpret(line):
             Log['cap'] = Log['trail'][0][0]
             Log['trail'][0] = Log['trail'][0][1:]
 
-    print('%s %s' % (time.strftime('%H:%M:%S', time.gmtime(Log['time'])), Log['line']))
+    print('%s %s' % (time.strftime('%H:%M:%S', time.gmtime(t)), Log['line']))
 
-    if Log['command'] == 'PRIVMSG':
+    if Log['command'] != None and Log['command'] == 'PRIVMSG':
         Log['context'] = Log['parameters'][0]
     else:
         Log['context'] = None
     
     return Log
 
-def listActive(self, chan, fullLog, minutes = 10, caller = None, full = False, exclude = []):
+def listActive(self, chan, minutes = 10, caller = None, full = False, exclude = []):
     activeList = []
     validList = []
-    timenow = lambda: int(round(time.time() * 1000))
-    fLog = {k: v for k, v in fullLog.items() if ((timenow - k)/6000 <= minutes or full) and v['context'] == chan}
-    fList = [fLog[k] for k in fLog.keys()]
+    timenow = current_milli_time()
+    fLog = {k: v for k, v in self.fLog.items() if ((timenow - k)/6000 <= minutes or full) and v['context'] == chan}
+    fList = [self.fLog[k] for k in fLog.keys()]
     fList.reverse()
-    
     uDict = list(self.userDict)
-    gUDict = self.userDict[group]
+    userDict = self.userDict
     
-    for group in uDict:
-        if caller and caller in self.userDict[group]:
-            userDict.remove(group)
-            break
+    if caller:
+        cAccount = [i.lower() in self.userDict[caller]]
+        fList = [i for i in fList if i['nick'].lower() not in cAccount]
+        
     for line in fList:
         for group in uDict:
+            gUDict = userDict[group]
             for unick in gUDict:
                 if line['nick'].lower() == unick.lower():
                     validList.append(line['nick'])
-                    del gUDict[unick]
+                    uDict.remove(group)
+                    fList = [i for i in fList if i['nick'] != line['nick']]
                     break
 
     for key in validList:
