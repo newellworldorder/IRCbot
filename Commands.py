@@ -68,7 +68,8 @@ def reddit(self,Log):
                     self.PRIVMSG(Log['context'],'07Reddit 10%s 14( %s )' % (user.name, user._url))
                 except:
                     self.PRIVMSG(Log['context'],'Reddit user \'%s\' does not exist.' % (redditItem))
-        except:
+        except Exception as e:
+            print(e)
             pass
 commands['!reddit'] = reddit
 
