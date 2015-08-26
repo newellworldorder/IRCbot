@@ -38,7 +38,8 @@ def interpret(line):
             Log['cap'] = Log['trail'][0][0]
             Log['trail'][0] = Log['trail'][0][1:]
 
-    print('%s %s' % (time.strftime('%H:%M:%S', time.gmtime(t)).encode('utf-8').strip(), Log['line']))
+    fmt = u'%H:%M:%S'
+    print('%s %s' % (time.strftime(fmt.encode('utf-8', time.gmtime(t)).decode('utf-8').strip(), Log['line']))
 
     if Log['command'] != None and Log['command'] == 'PRIVMSG':
         Log['context'] = Log['parameters'][0]
