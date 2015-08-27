@@ -59,7 +59,9 @@ def listActive(self, chan, minutes = 10, caller = None, full = False, exclude = 
     userDict = self.userDict
     
     if caller:
-        cAccount = [i.lower() in self.userDict[caller]]
+        cAccount = []
+        for nick in self.userDict[caller]:
+            cAccount.append(nick.lower())
         fList = [i for i in fList if i['nick'].lower() not in cAccount]
         
     for line in fList:
