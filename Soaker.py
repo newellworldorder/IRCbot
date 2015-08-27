@@ -22,7 +22,7 @@ def confirm(self,Log):
     tipper = Log['trail'][1]
     soakopt = self.soakOptionQueue.pop(0)
     initAmount = int(Log['trail'][4][1:])
-    activeUser = self.listActive(Log['context'],self.fLog,10,tipper,soakopt['all'],soakopt['exclude'])
+    activeUser = self.listActive(Log['context'],10,tipper,soakopt['all'],soakopt['exclude'])
     if len(activeUser) > 0:
         tipAmount = initAmount // len(activeUser)
         if tipAmount >= 10:
