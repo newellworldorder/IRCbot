@@ -39,9 +39,9 @@ def interpret(line):
             Log['trail'][0] = Log['trail'][0][1:]
 
     fmt = u'%H:%M:%S'
-    print('%s %s' % (time.strftime(fmt.encode('utf-8', time.gmtime(t)).decode('utf-8').strip(), Log['line']))
+    print('%s %s' % (time.strftime(fmt.encode('utf-8', time.gmtime(t)).decode('utf-8').strip()), Log['line']))
 
-    if Log['command'] != None and Log['command'] == 'PRIVMSG':
+    if Log['command'] == 'PRIVMSG':
         Log['context'] = Log['parameters'][0]
     else:
         Log['context'] = None
@@ -60,8 +60,11 @@ def listActive(self, chan, minutes = 10, caller = None, full = False, exclude = 
     
     if caller:
         cAccount = []
-        for nick in self.userDict[caller]:
-            cAccount.append(nick.lower())
+        for group in userDict:
+            if caller.lower() in userDict[group]:
+                for nick in userDict[group]:
+                    cAccount.append(nick)
+                    break
         fList = [i for i in fList if i['nick'].lower() not in cAccount]
         
     for line in fList:
