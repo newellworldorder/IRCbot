@@ -123,8 +123,11 @@ commands['bmi'] = bmiCalc
 
 def diceRoller(self,line):
     if 'd' in line['trail'][1].lower():
-        numRolls = int(line['trail'][1].lower().split('d')[0])
-        dieEdges = int(line['trail'][1].lower().split('d')[1])
+        try:
+            numRolls = int(line['trail'][1].lower().split('d')[0])
+            dieEdges = int(line['trail'][1].lower().split('d')[1])
+        except:
+            self.PRIVMSG(line['context'], 'Invalid roll: %s' % line['trail'][1])
         sumRolls = 0
         if numRolls >= 0 and dieEdges > 0 and dieEdges * numRolls < sys.maxsize:
             i = 0
