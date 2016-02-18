@@ -1,6 +1,7 @@
-# coding=utf8
+# -*- coding: utf-8 -*-
 
 from bs4 import BeautifulSoup
+from datetime import datetime
 import praw, re, requests, time
 
 commands = {}
@@ -18,15 +19,120 @@ def nwodo(self,Log):
         self.ircSend(' '.join(Log['trail'][1:]))
 commands['!nwodo'] = nwodo
 
+def formatList(inList):
+    outList = inList
+    if len(inList) > 1:
+        outList = inList
+        outList[-1] = 'and ' + str(outList[-1])
+    return ', '.join(outList)
+
+def timeDiffToString(t1, t2):
+    t1D = datetime.utcfromtimestamp(t1)
+    t2D = datetime.utcfromtimestamp(t2)
+    elapsedTime = t2D - t1D
+    d = elapsedTime.days
+    m, s = divmod(elapsedTime.seconds, 60)
+    h, m = divmod(m, 60)
+    outList = []
+    if not(d) and not(h) and not(m) and not(s):
+        return 'now'
+    if d:
+        outList.append('%d days' % d)
+    if h:
+        outList.append('%d hours' % h)
+    if m:
+        outList.append('%d minutes' % m)
+    if s:
+        outList.append('%d seconds' % s)
+    return formatList(outList)+' ago'
+
+def seenRecurse(t, query, lastSeen):
+    if type(lastSeen[query]) == str:
+        return seenRecurse(t, lastSeen[query], lastSeen)
+    else:
+        lastAction = lastSeen[query]['lastAction']
+        lastMessage = lastSeen[query]['lastMessage']
+        tDiff = timeDiffToString(lastAction[0], t)
+        outString = '%s was last seen %s %sing' % (query, tDiff, lastAction[1])
+        if lastMessage or len(lastAction) > 2:
+            if lastAction[1] == 'join' or lastAction[1] == 'talk':
+                outString += ', saying \"%s\"' % lastMessage[1]
+            else:
+                outString += ', saying \"%s\"' % lastAction[2]
+        return outString + '.'
+
+def seen(self,Log):
+    if Log['trail'][1].lower() in [x.lower() for x in self.lastSeen[Log['context']]]:
+        for nick in self.lastSeen[Log['context']]:
+            if nick.lower() == Log['trail'][1].lower():
+                self.PRIVMSG(Log['context'], seenRecurse(time.time(), nick, self.lastSeen[Log['context']]))
+                break
+    else:
+        self.PRIVMSG(Log['context'], 'I have not seen \"%s\".' % Log['trail'][1])
+commands['!seen'] = seen
+
+def bmiCalc(self,Log):
+    newLog = ''.join(Log['trail'][1:])
+    inchInM = 39.3701
+    lbInKg = 0.453592
+    kg = 0
+    m = 0
+    if 'm' not in newLog:
+        if '\'' in newLog:
+            p = re.compile('(\d+[.])?\d+[\']')
+            m = float(p.search(newLog).group()[:-1]) * 12
+        if '"' in newLog:
+            p = re.compile('(\d+[.])?\d+["]')
+            m += float(p.search(newLog).group()[:-1])
+        m = m / inchInM
+    else:
+        if 'cm' in newLog:
+            p = re.compile('(\d+[.])?\d+[c][m]')
+            m = float(p.search(newLog).group()[:-2]) / 100
+        elif 'dm' in newLog:
+            p = re.compile('(\d+[.])?\d+[d][m]')
+            m = float(p.search(newLog).group()[:-2]) / 10
+        elif 'm' in newLog:
+            p = re.compile('(\d+[.])?\d+[m]')
+            m = float(p.search(newLog).group()[:-1])
+    if 'st' in newLog:
+        p = re.compile('(\d+[.])?\d+[s][t]')
+        kg = float(p.search(newLog).group()[:-2]) * 14 * lbInKg
+    elif 'lb' in newLog:
+        p = re.compile('(\d+[.])?\d+[l][b]')
+        kg = float(p.search(newLog).group()[:-2]) * lbInKg
+    elif 'kg' in newLog:
+        p = re.compile('(\d+[.])?\d+[k][g]')
+        kg = float(p.search(newLog).group()[:-2])
+    elif 'g' in newLog:
+        p = re.compile('(\d+[.])?\d+[g]')
+        kg = float(p.search(newLog).group()[:-1]) / 1000
+    if m > 0 and kg > 0:
+        bmi = kg/(m*m)
+        bmiStr = format(bmi, '.2f')
+        outString = 'Your BMI is %s' % bmiStr
+        if bmi >= 30.0:
+            outString += ', you are 04obese'
+        elif bmi >= 25.0:
+            outString += ', you are 07overweight'
+        elif bmi >= 18.5:
+            outString += ', you are 09normal'
+        else:
+            outString += ', you are 07underweight'
+        self.PRIVMSG(Log['context'],outString + '.')
+    else:
+        self.PRIVMSG(Log['context'],'Give me valid inputs. I accept mass in g, kg, lb, st, and height in cm, m, \', "')
+commands['!bmi'] = bmiCalc
+
 def active(self,Log):
     if len(self.listActive(Log['context'])) == 1:
-        self.PRIVMSG(Log['context'],'There is 1 active user here (only users identified with NickServ are included)')
+        self.PRIVMSG(Log['context'],'There is 1 active user here.')
     else:
-        self.PRIVMSG(Log['context'],'There are %s active users in here (only users identified with NickServ are included)' % len(self.listActive(Log['context'])))
+        self.PRIVMSG(Log['context'],'There are %s active users in here.' % len(self.listActive(Log['context'])))
 commands['!active'] = active
 
 def activelist(self,Log):
-    self.ircSend('NOTICE '+Log['nick']+' :%s' % ' '.join(self.listActive(Log['context'])))
+    self.ircSend('NOTICE %s %s' % (Log['nick'], formatList(self.listActive(Log['context']))))
 commands['!activelist'] = activelist
 
 def reddit(self,Log):

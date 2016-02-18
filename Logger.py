@@ -1,21 +1,18 @@
-# coding=utf8
+# -*- coding: utf-8 -*-
 
 import time
-
-def current_milli_time():
-    return int(round(time.time() * 1000))
 
 def interpret(line):
     t = time.time()
     Log = {}
     Log['line'] = line
-    Log['time'] = current_milli_time()
+    Log['time'] = t
+    Log['vTime'] = time.strftime("%H:%M:%S",time.gmtime(t))
     Log['nick'] = None
     Log['ident'] = None
     Log['host'] = None
     Log['command'] = None
     Log['parameters'] = []
-    Log['cap'] = ''
     Log['trail'] = []
     words = str(line).split()
     if line[0] == ':':
@@ -31,53 +28,23 @@ def interpret(line):
                 break
             Log['parameters'].append(words.pop(0))
 
-    Log['trail'] = ' '.join(words).split()
-    if len(Log['trail']) > 0 and len(Log['trail'][0]) > 0:
-        Log['trail'][0] = Log['trail'][0][1:]
-        if len(Log['trail'][0]) > 0 and (Log['trail'][0][0] == '+' or Log['trail'][0][0] == '-'):
-            Log['cap'] = Log['trail'][0][0]
-            Log['trail'][0] = Log['trail'][0][1:]
-
-    fmt = u'%H:%M:%S'
-    print('%s %s' % (time.strftime(fmt.encode('utf-8', time.gmtime(t)).decode('utf-8').strip()), Log['line']))
-
-    if Log['command'] == 'PRIVMSG':
+    if words:
+        words[0] = words[0].lstrip(':+-')
+        Log['trail'] = ' '.join(words).split()
+    if Log['parameters']:
         Log['context'] = Log['parameters'][0]
-    else:
-        Log['context'] = None
-    
+
+    print('%s %s' % (Log['vTime'], Log['line']))
+
     return Log
 
-def listActive(self, chan, minutes = 10, caller = None, full = False, exclude = []):
+def listActive(self, channel, timer = 10):
+    t = time.time()
     activeList = []
-    validList = []
-    timenow = current_milli_time()
-    fLog = {k: v for k, v in self.fLog.items() if ((timenow - k)/6000 <= minutes or full) and v['context'] == chan}
-    fList = [self.fLog[k] for k in fLog.keys()]
-    fList.reverse()
-    uDict = list(self.userDict)
-    userDict = self.userDict
-    
-    if caller:
-        cAccount = []
-        for group in userDict:
-            if caller.lower() in userDict[group]:
-                for nick in userDict[group]:
-                    cAccount.append(nick)
-                    break
-        fList = [i for i in fList if i['nick'].lower() not in cAccount]
-        
-    for line in fList:
-        for group in uDict:
-            gUDict = userDict[group]
-            for unick in gUDict:
-                if line['nick'].lower() == unick.lower():
-                    validList.append(line['nick'])
-                    uDict.remove(group)
-                    fList = [i for i in fList if i['nick'] != line['nick']]
-                    break
-
-    for key in validList:
-        if key not in self.info['IGNORE'] and key != self.info['NICK'] and key not in exclude:
-                activeList.append(key)
+    for nick in self.lastSeen[channel]:
+        if type(nick) is str or not(nick['lastMessage']) or nick.lower() == caller.lower():
+            continue
+        if nick['lastAction'][1] == 'talk' or nick['lastAction'][1] == 'join':
+            if nick['lastMessage'][0] < t - (timer * 60):
+                activeList.append(nick)
     return activeList

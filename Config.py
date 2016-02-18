@@ -8,10 +8,10 @@ def config(self):
         setup()
         config(self)
     try:
-        with open('users', 'r') as file:
+        with open('lastseen.txt', 'r') as file:
             self.userDict = eval(file.read())
     except:
-        userlist()
+        lastseen()
         config(self)
 
 def setup():
@@ -39,7 +39,7 @@ def setup():
     with open('nwobot.conf', 'w+') as file:
         file.write(str(conf))
 
-def userlist():
-    with open('users', 'w+') as file:
-        userlist = {}
-        file.write(str(userlist))
+def lastseen():
+    with open('lastseen.txt', 'w+') as file:
+        lastseen = {}
+        file.write(str(lastseen))

@@ -1,26 +1,25 @@
-# coding=utf8
+# -*- coding: utf-8 -*-
 
 from bs4 import BeautifulSoup
 from operator import itemgetter
-import base64, Commands, Config, importlib, Logger, praw, re, requests, Soaker, socket, ssl, sys, time, types, URLInfo
+import base64, Commands, Config, importlib, Logger, praw, re, requests, socket, ssl, sys, time, types, URLInfo
 
 class IRC:
     def __init__(self):
         Config.config(self)
-        self.activeDict = {}
+
+        # lastSeen is a dict of dicts. The first level is channels, then nicks, then [time,lastAction,lastMessage]
+        self.lastSeen = {}
         for channel in self.info['CHAN']:
-            self.activeDict[channel] = {}
+            self.lastSeen[channel] = {}
         Commands.redditAPI(self)
-        Soaker.Soaker(self)
         self.Connect()
-        self.fLog = {}
         self.Main()
 
     def Connect(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((self.info['HOST'], int(self.info['PORT'])))
         self.irc = ssl.wrap_socket(sock)
-        connectMSG = []
         if self.info['SASL']:
             self.ircSend('CAP LS')
         self.ircSend('NICK %s' % self.info['NICK'])
@@ -46,7 +45,6 @@ class IRC:
                     continue
 
                 Log = Logger.interpret(line)
-                self.fLog[Log['time']] = Log
 
                 # reply to pings
                 if Log['command'] == 'PING':
@@ -88,134 +86,87 @@ class IRC:
                         self.updateFile()
                         self.ircSend('JOIN %s' % Log['trail'][0])
 
-                # checks channel join
-                if Log['command'] == 'JOIN':
-                    if Log['nick'] == self.info['NICK']:
-                        self.activeDict[Log['parameters'][0]] = {}
-                        self.ircSend('WHO %s %%na' % Log['parameters'][0])
-                    elif Log['nick'] not in self.activeDict[Log['parameters'][0]]:
-                        self.activeDict[Log['parameters'][0]][Log['nick']] = 0
-                        if Log['nick'] not in list(self.userDict.values()):
-                            self.ircSend('WHOIS %s' % Log['nick'])
-                    continue
-
                 # checks nick change
                 if Log['command'] == 'NICK':
                     if Log['nick'] == self.info['NICK']:
                         self.info['NICK'] = Log['trail'][0]
                     else:
-                        for channels in self.info['CHAN']:
-                            if Log['nick'] in self.activeDict[channels]:
-                                self.activeDict[channels][Log['trail'][0]] = self.activeDict[channels][Log['nick']]
-                                del self.activeDict[channels][Log['nick']]
-                        self.ircSend('WHOIS %s' % Log['trail'][0])
+                        for channel in self.info['CHAN']:
+                            if Log['nick'] in self.lastSeen[channel]:
+                                self.lastSeen[channel][Log['trail'][0]] = self.lastSeen[channel][Log['nick']]
+                                self.lastSeen[channel][Log['nick']] = Log['trail'][0]
+                        self.updateLastSeen()
                     continue
 
-                # parses NAMES result
-                if str(Log['command']) == '353' and len(Log['parameters']) > 2:
-                    if Log['parameters'][-1] not in self.activeDict:
-                        self.activeDict[Log['parameters'][-1]] = {}
-                    for names in Log['trail']:
-                        names = names.lstrip('@+')
-                        if names != self.info['NICK']:
-                            self.activeDict[Log['parameters'][-1]][names] = 0
-                    continue
 
-                # parses WHOIS result
-                if (str(Log['command']) == '330' or str(Log['command']) == '354') and len(Log['parameters']) > 2:
-                    if Log['parameters'][2] != str(0):
-                        if Log['parameters'][2] not in self.userDict:
-                            self.userDict[Log['parameters'][2]] = []
-                        if Log['parameters'][1] not in self.userDict[Log['parameters'][2]] and Log['parameters'][1] != self.info['NICK']:
-                            self.userDict[Log['parameters'][2]].append(Log['parameters'][1])
-                        self.updateFile()
+                # checks channel join
+                if Log['command'] == 'JOIN':
+                    if Log['parameters'] and Log['nick'] != self.info['NICK']:
+                        self.lastSeen[Log['context']][Log['nick']]['lastAction'] = [Log['time'], 'join']
+                        if Log['nick'] not in self.lastSeen[Log['context']]:
+                            self.lastSeen[Log['context']][Log['nick']]['lastMessage'] = None
+                        self.updateLastSeen()
                     continue
 
                 # updates active list if user leaves
                 if Log['command'] == 'PART':
-                    if Log['nick'] in self.activeDict[Log['parameters'][0]]:
-                        del self.activeDict[Log['parameters'][0]][Log['nick']]
+                    if Log['nick'] in self.lastSeen[Log['context']]:
+                        self.lastSeen[Log['context']][Log['nick']]['lastAction'] = [Log['time'], 'leav', ' '.join(Log['trail'])]
+                    self.updateLastSeen()
                     continue
+
                 if Log['command'] == 'QUIT':
-                    for channels in self.info['CHAN']:
-                        if Log['nick'] in self.activeDict[channels]:
-                            del self.activeDict[channels][Log['nick']]
+                    for channel in self.info['CHAN']:
+                        if Log['nick'] in self.lastSeen[channel]:
+                            self.lastSeen[Log['context']][Log['nick']]['lastAction'] = [Log['time'], 'quitt', ' '.join(Log['trail'])]
+                    self.updateLastSeen()
                     continue
 
                 # checks when PRIVMSG received
                 if Log['command'] == 'PRIVMSG':
-                    if Log['context'] not in self.info['UNLOAD'].keys():
-                        self.info['UNLOAD'][Log['context']] = []
-                    
+                    if Log['parameters'][0].lower() == self.info['NICK'] and Log['trail'][0] == '\001VERSION\001':
+                        self.ircSend('NOTICE %s \001VERSION PyIRC:1.0:Windows\001' % Log['nick'])
+                        continue
+
                     # builds last spoke list
-                    if Log['context'] not in self.activeDict:
-                        self.activeDict[Log['context']] = {}
-                    self.activeDict[Log['context']][Log['nick']] = Log['time']
-                    validList = []
-                    for group in self.userDict.values():
-                        validList.extend(group)
-                    if Log['nick'] not in validList and Log['cap'] == '+':
-                        self.ircSend('WHOIS %s' % Log['nick'])
+                    if Log['context'] not in self.lastSeen:
+                        self.lastSeen[Log['context']] = {}
+                    if Log['nick'] not in self.lastSeen[Log['context']]:
+                        self.lastSeen[Log['context']][Log['nick']] = {}
+                    self.lastSeen[Log['context']][Log['nick']]['lastAction'] = [Log['time'], 'talk']
+                    self.lastSeen[Log['context']][Log['nick']]['lastMessage'] = [Log['time'], ' '.join(Log['trail'])]
+                    self.updateLastSeen()
 
                     if Log['host'] in self.info['OWNER'] + self.info['SUDOER']:
-                        if len(Log['trail']) > 1:
-                            def imports():
-                                for name, val in globals().items():
-                                    if isinstance(val, types.ModuleType):
-                                        yield val.__name__
-                            try:
-                                if Log['trail'][0].lower() == '!load':
-                                    if Log['trail'][1] in self.info['UNLOAD'][Log['context']]:
-                                        self.info['UNLOAD'][Log['context']].remove(Log['trail'][1])
-                                        self.PRIVMSG(Log['context'],'Module \'%s\' loaded' % Log['trail'][1])
-                                        
-                                if Log['trail'][0].lower() == '!unload':
-                                    if Log['trail'][1] in list(imports()) and Log['trail'][1] not in self.info['UNLOAD'][Log['context']]:
-                                        self.info['UNLOAD'][Log['context']].append(Log['trail'][1])
-                                        self.PRIVMSG(Log['context'],'Module \'%s\' unloaded' % Log['trail'][1])
-                                        self.updateFile()
-
-                                if Log['trail'][0].lower() == '!reload':
-                                    module = __import__(Log['trail'][1])
-                                    if Log['trail'][1] == 'IRCbot':
-                                        self.ircSend('QUIT')
-                                        self.irc.close()
-                                    if Log['trail'][1] in list(imports()):
-                                        importlib.reload(module)
-                                        self.PRIVMSG(Log['context'],'Module \'%s\' reloaded' % Log['trail'][1])
-                            except Exception as e:
-                                print(e)
-
                         if Log['trail'][0] == '!quit':
                             self.ircSend('QUIT')
                             self.irc.close()
                             sys.exit('User exited')
 
-                    if 'Soaker' not in self.info['UNLOAD'][Log['context']]:
-                        Soaker.Handler(self, Log)
-                        
-                    if 'Commands' not in self.info['UNLOAD'][Log['context']]:
-                        Commands.Handler(self, Log)
-                    
-                    if 'URLInfo' not in self.info['UNLOAD'][Log['context']]:
-                        URLInfo.Handler(self, Log)
+                    Commands.Handler(self, Log)
 
-    def updateFile(self):
+                    URLInfo.Handler(self, Log)
+
+    def updateFiles(self):
+        self.updateConf()
+        self.updateLastSeen()
+
+    def updateConf(self):
         with open('nwobot.conf', 'r') as file:
             oldConf = eval(file.read())
-        with open('users', 'r') as file:
-            oldUser = eval(file.read())
         if self.info != oldConf:
             with open('nwobot.conf', 'w+') as file:
                 file.write(str(self.info))
-        if self.userDict != oldUser:
-            with open('users', 'w+') as file:
-                file.write(str(self.userDict))
 
-    def listActive(self, chan, minutes = 10, caller = None, full = False, exclude = []):
-        return Logger.listActive(self, chan, minutes, caller, full, exclude)
+    def updateLastSeen(self):
+        with open('lastseen.txt', 'r') as file:
+            oldSeen = eval(file.read())
+        if self.lastSeen != oldSeen:
+            with open('lastseen.txt', 'w+') as file:
+                file.write(str(self.lastSeen))
 
-    current_milli_time = lambda: int(round(time.time() * 1000))
+    def listActive(self, channel, timer = 10):
+        return Logger.listActive(self, channel, timer)
 
     def PRIVMSG(self, context, message):
         self.ircSend('PRIVMSG %s :%s' % (context, message))
