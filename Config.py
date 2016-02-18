@@ -9,7 +9,7 @@ def config(self):
         config(self)
     try:
         with open('lastseen.txt', 'r') as file:
-            self.userDict = eval(file.read())
+            self.lastSeen = eval(file.read())
     except:
         lastseen()
         config(self)
@@ -32,7 +32,6 @@ def setup():
         conf['IGNORE'] = input("Enter the nicks that the bot should ignore (comma separated): ").split(',')
         conf['OWNER'] = input("Enter the hosts of the owner(s) (comma separated): ").split(',')
         conf['SUDOER'] = input("Enter the hosts to receive extra privileges (comma separated): ").split(',')
-        conf['UNLOAD'] = {}
         confirm = input("\n Confirm? y/N: ")
         if 'y' in confirm.lower():
             unconfirmed = False

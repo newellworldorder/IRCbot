@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
+# coding=utf8
 
 from bs4 import BeautifulSoup
 from datetime import datetime
-import praw, re, requests, time
+from random import randint
+import praw, re, requests, sys, time
 
 commands = {}
 
@@ -14,17 +15,14 @@ def redditAPI(self):
     except:
         self.redditEnabled = False
 
-def nwodo(self,Log):
-    if Log['host'] in self.info['SUDOER'] + self.info['OWNER']:
-        self.ircSend(' '.join(Log['trail'][1:]))
-commands['!nwodo'] = nwodo
-
 def formatList(inList):
-    outList = inList
+    output = inList
     if len(inList) > 1:
-        outList = inList
-        outList[-1] = 'and ' + str(outList[-1])
-    return ', '.join(outList)
+        output = inList
+        output[-1] = 'and ' + str(output[-1])
+        if len(inList) > 2:
+            return ', '.join(output)
+    return ' '.join(output)
 
 def timeDiffToString(t1, t2):
     t1D = datetime.utcfromtimestamp(t1)
@@ -53,100 +51,116 @@ def seenRecurse(t, query, lastSeen):
         lastAction = lastSeen[query]['lastAction']
         lastMessage = lastSeen[query]['lastMessage']
         tDiff = timeDiffToString(lastAction[0], t)
-        outString = '%s was last seen %s %sing' % (query, tDiff, lastAction[1])
+        output = '%s was last seen %sing %s' % (query, lastAction[1], tDiff)
         if lastMessage or len(lastAction) > 2:
-            if lastAction[1] == 'join' or lastAction[1] == 'talk':
-                outString += ', saying \"%s\"' % lastMessage[1]
+            if (lastAction[1] == 'quitt' or lastAction[1] == 'leav') and len(lastAction[2]) > 0:
+                output += ', saying \"%s\"' % lastAction[2]
             else:
-                outString += ', saying \"%s\"' % lastAction[2]
-        return outString + '.'
+                output += ', saying \"%s\"' % lastMessage[1]
+        return output + '.'
 
-def seen(self,Log):
-    if Log['trail'][1].lower() in [x.lower() for x in self.lastSeen[Log['context']]]:
-        for nick in self.lastSeen[Log['context']]:
-            if nick.lower() == Log['trail'][1].lower():
-                self.PRIVMSG(Log['context'], seenRecurse(time.time(), nick, self.lastSeen[Log['context']]))
+def seen(self,line):
+    if line['trail'][1].lower() in [x.lower() for x in self.lastSeen[line['context']]]:
+        for nick in self.lastSeen[line['context']]:
+            if nick.lower() == line['trail'][1].lower():
+                self.PRIVMSG(line['context'], seenRecurse(time.time(), nick, self.lastSeen[line['context']]))
                 break
     else:
-        self.PRIVMSG(Log['context'], 'I have not seen \"%s\".' % Log['trail'][1])
-commands['!seen'] = seen
+        self.PRIVMSG(line['context'], 'I have not seen \"%s\".' % line['trail'][1])
+commands['seen'] = seen
 
-def bmiCalc(self,Log):
-    newLog = ''.join(Log['trail'][1:])
-    inchInM = 39.3701
-    lbInKg = 0.453592
+def bmiCalc(self,line):
+    trail = ''.join(line['trail'][1:])
     kg = 0
     m = 0
-    if 'm' not in newLog:
-        if '\'' in newLog:
-            p = re.compile('(\d+[.])?\d+[\']')
-            m = float(p.search(newLog).group()[:-1]) * 12
-        if '"' in newLog:
-            p = re.compile('(\d+[.])?\d+["]')
-            m += float(p.search(newLog).group()[:-1])
-        m = m / inchInM
-    else:
-        if 'cm' in newLog:
-            p = re.compile('(\d+[.])?\d+[c][m]')
-            m = float(p.search(newLog).group()[:-2]) / 100
-        elif 'dm' in newLog:
-            p = re.compile('(\d+[.])?\d+[d][m]')
-            m = float(p.search(newLog).group()[:-2]) / 10
-        elif 'm' in newLog:
-            p = re.compile('(\d+[.])?\d+[m]')
-            m = float(p.search(newLog).group()[:-1])
-    if 'st' in newLog:
-        p = re.compile('(\d+[.])?\d+[s][t]')
-        kg = float(p.search(newLog).group()[:-2]) * 14 * lbInKg
-    elif 'lb' in newLog:
-        p = re.compile('(\d+[.])?\d+[l][b]')
-        kg = float(p.search(newLog).group()[:-2]) * lbInKg
-    elif 'kg' in newLog:
-        p = re.compile('(\d+[.])?\d+[k][g]')
-        kg = float(p.search(newLog).group()[:-2])
-    elif 'g' in newLog:
-        p = re.compile('(\d+[.])?\d+[g]')
-        kg = float(p.search(newLog).group()[:-1]) / 1000
+    heights = [#[['mm','millimet'], 0.001],
+               [['cm','centimet'], 0.01],
+               [['dm','decimet'], 0.1],
+               [['m','met'], 1],
+               [['\'','ft','feet','foot'], 0.3048],
+               [['\"','in'], 0.0254],
+               [['yr','yard'], 0.9144]]
+    masses = [[['mg','milligram'], 0.000001],
+              [['cg','centigram'], 0.00001],
+              [['dg','decigram'], 0.0001],
+              [['g','gram'], 0.001],
+              [['kg','kilogram'], 1],
+              [['oz','ou'], 0.0283495],
+              [['lb','pound'], 0.453592],
+              [['st','stone'], 6.35029]]
+    for units in heights:
+        for name in units[0]:
+            if name in trail:
+                regex = '(\d+[.])?\d+[%s]' % name
+                p = re.compile(regex)
+                if p.search(trail):
+                    m += float(re.sub("\D", "", p.search(trail).group())) * units[1]
+                    break
+    for units in masses:
+        for name in units[0]:
+            if name in trail:
+                regex = '(\d+[.])?\d+[%s]' % name
+                p = re.compile(regex)
+                if p.search(trail):
+                    kg += float(re.sub("\D", "", p.search(trail).group())) * units[1]
+                    break
     if m > 0 and kg > 0:
         bmi = kg/(m*m)
         bmiStr = format(bmi, '.2f')
-        outString = 'Your BMI is %s' % bmiStr
+        output = 'Your BMI is %s' % bmiStr
         if bmi >= 30.0:
-            outString += ', you are 04obese'
+            output += ', you are 04obese'
         elif bmi >= 25.0:
-            outString += ', you are 07overweight'
+            output += ', you are 07overweight'
         elif bmi >= 18.5:
-            outString += ', you are 09normal'
+            output += ', you are 09normal'
         else:
-            outString += ', you are 07underweight'
-        self.PRIVMSG(Log['context'],outString + '.')
+            output += ', you are 08underweight'
+        self.PRIVMSG(line['context'],output + '\017.')
     else:
-        self.PRIVMSG(Log['context'],'Give me valid inputs. I accept mass in g, kg, lb, st, and height in cm, m, \', "')
-commands['!bmi'] = bmiCalc
+        self.PRIVMSG(line['context'],'Give me valid inputs. I accept inputs in most real units.')
+commands['bmi'] = bmiCalc
 
-def active(self,Log):
-    if len(self.listActive(Log['context'])) == 1:
-        self.PRIVMSG(Log['context'],'There is 1 active user here.')
+def diceRoller(self,line):
+    if 'd' in line['trail'][1].lower():
+        numRolls = int(line['trail'][1].lower().split('d')[0])
+        dieEdges = int(line['trail'][1].lower().split('d')[1])
+        sumRolls = 0
+        if numRolls >= 0 and dieEdges > 0 and dieEdges * numRolls < sys.maxsize:
+            i = 0
+            while i < numRolls:
+                sumRolls += randint(1, dieEdges)
+                i += 1
+            self.PRIVMSG(line['context'], '%d' % sumRolls)
+        else:
+            self.PRIVMSG(line['context'], 'Invalid roll: %s' % line['trail'][1])
     else:
-        self.PRIVMSG(Log['context'],'There are %s active users in here.' % len(self.listActive(Log['context'])))
-commands['!active'] = active
+        self.PRIVMSG(line['context'], 'Invalid roll: %s' % line['trail'][1])
+commands['roll'] = diceRoller
 
-def activelist(self,Log):
-    self.ircSend('NOTICE %s %s' % (Log['nick'], formatList(self.listActive(Log['context']))))
-commands['!activelist'] = activelist
+def active(self,line):
+    if len(self.listActive(line['context'])) == 1:
+        self.PRIVMSG(line['context'],'There is 1 active user here.')
+    else:
+        self.PRIVMSG(line['context'],'There are %s active users in here.' % len(self.listActive(line['context'])))
+commands['active'] = active
 
-def reddit(self,Log):
+def activelist(self,line):
+    self.ircSend('NOTICE %s %s' % (line['nick'], formatList(self.listActive(line['context']))))
+commands['activelist'] = activelist
+
+def reddit(self,line):
     if not self.redditEnabled:
         redditAPI(self)
     else:
         try:
             r = self.r
-            redditItem = Log['trail'][1]
-            if (len(Log['trail']) > 2 and Log['trail'][2].lower() != 'user') or len(Log['trail']) < 3:
+            redditItem = line['trail'][1]
+            if (len(line['trail']) > 2 and line['trail'][2].lower() != 'user') or len(line['trail']) < 3:
                 sub = None
                 nsfwstatus = ''
-                if len(Log['trail']) > 2:
-                    category = Log['trail'][2].lower()
+                if len(line['trail']) > 2:
+                    category = line['trail'][2].lower()
                     if category == 'controversial':
                         s = r.get_subreddit(redditItem.lower()).get_controversial(limit=1)
                     elif category == 'hot':
@@ -157,8 +171,8 @@ def reddit(self,Log):
                         sub = r.get_subreddit(redditItem.lower()).get_random_submission()
                     elif category == 'rising':
                         s = r.get_subreddit(redditItem.lower()).get_rising(limit=1)
-                    elif category == 'search' and len(Log['trail']) > 3:
-                        s = r.get_subreddit(redditItem.lower()).search('+'.join(Log['trail'][3:]),limit=1)
+                    elif category == 'search' and len(line['trail']) > 3:
+                        s = r.get_subreddit(redditItem.lower()).search('+'.join(line['trail'][3:]),limit=1)
                     elif category == 'top':
                         s = r.get_subreddit(redditItem.lower()).get_top(limit=1)
                 else:
@@ -167,21 +181,21 @@ def reddit(self,Log):
                     sub = next(s)
                 if sub.over_18:
                     nsfwstatus = 'NSFW '
-                self.PRIVMSG(Log['context'],'07Reddit 04%s10%s - 12%s 14( %s )' % (nsfwstatus, sub.subreddit.url, sub.title, sub.url))
-            elif (len(Log['trail']) > 2 and Log['trail'][2].lower() == 'user'):
+                self.PRIVMSG(line['context'],'07Reddit 04%s10%s - 12%s 14( %s )' % (nsfwstatus, sub.subreddit.url, sub.title, sub.url))
+            elif (len(line['trail']) > 2 and line['trail'][2].lower() == 'user'):
                 try:
                     user = r.get_redditor(redditItem)
-                    self.PRIVMSG(Log['context'],'07Reddit 10%s 14( %s )' % (user.name, user._url))
+                    self.PRIVMSG(line['context'],'07Reddit 10%s 14( %s )' % (user.name, user._url))
                 except:
-                    self.PRIVMSG(Log['context'],'Reddit user \'%s\' does not exist.' % (redditItem))
+                    self.PRIVMSG(line['context'],'Reddit user \'%s\' does not exist.' % (redditItem))
         except Exception as e:
             print(e)
             pass
-commands['!reddit'] = reddit
+commands['reddit'] = reddit
 
-def ud(self,Log):
+def ud(self,line):
     try:
-        r = requests.get('http://api.urbandictionary.com/v0/define?term=%s' % '+'.join(Log['trail'][1:]))
+        r = requests.get('http://api.urbandictionary.com/v0/define?term=%s' % '+'.join(line['trail'][1:]))
         data = r.json()
         if data['result_type'] != 'no_results':
             definition = ' '.join(data['list'][0]['definition'].splitlines())
@@ -189,100 +203,102 @@ def ud(self,Log):
             if len(definition) >= 150:
                 truncated = '...'
                 definition = definition[:146]
-            self.PRIVMSG(Log['context'],'Urban08Dictionary 12%s - 06%s%s 10( %s )' % (data['list'][0]['word'], definition[:149], truncated, data['list'][0]['permalink']))
+            self.PRIVMSG(line['context'],'Urban08Dictionary 12%s - 06%s%s 10( %s )' % (data['list'][0]['word'], definition[:149], truncated, data['list'][0]['permalink']))
         else:
-            self.PRIVMSG(Log['context'],'No definition for %s' % ' '.join(Log['trail'][1:]))
+            self.PRIVMSG(line['context'],'No definition for %s' % ' '.join(line['trail'][1:]))
     except:
         print('Error fetching definition')
-        self.PRIVMSG(Log['context'],'I cannot fetch this definition at the moment')
-commands['!ud'] = ud
+        self.PRIVMSG(line['context'],'I cannot fetch this definition at the moment')
+commands['ud'] = ud
 
-def google(self,Log):
-    url = 'https://www.google.com/search?q=%s&btnI' % '+'.join(Log['trail'][1:])
-    r = requests.get('https://www.google.com/search?q=%s&btnI' % '+'.join(Log['trail'][1:]))
-    if '/search?q=%s&btnI' % '+'.join(Log['trail'][1:]) in r.url:
-        self.PRIVMSG(Log['context'],'12G04o08o12g03l04e 06[%s] 13%s' % (' '.join(Log['trail'][1:]), url[:-5]))
+def google(self,line):
+    url = 'https://www.google.com/search?q=%s&btnI' % '+'.join(line['trail'][1:])
+    r = requests.get('https://www.google.com/search?q=%s&btnI' % '+'.join(line['trail'][1:]))
+    if '/search?q=%s&btnI' % '+'.join(line['trail'][1:]) in r.url:
+        self.PRIVMSG(line['context'],'12G04o08o12g03l04e 06[%s] 13%s' % (' '.join(line['trail'][1:]), url[:-5]))
     else:
         r2 = requests.get(r.url, timeout=2)
-        soup = BeautifulSoup(r.text)
+        soup = BeautifulSoup(r.text, "html.parser")
         title = soup.title.text.strip()
         if title:
             linkinfo = ' – 03%s' % title
-        self.PRIVMSG(Log['context'],'12G04o08o12g03l04e 12%s04%s 08( %s )' % (' '.join(Log['trail'][1:]), linkinfo, r.url))
-commands['!google'] = google
+        self.PRIVMSG(line['context'],'12G04o08o12g03l04e 12%s04%s 08( %s )' % (' '.join(line['trail'][1:]), linkinfo, r.url))
+commands['google'] = google
 
-def wiki(self,Log):
-    search = '_'.join(Log['trail'][1:])
+def wiki(self,line):
+    search = '_'.join(line['trail'][1:])
     url = 'http://en.wikipedia.org/wiki/%s' % search
     r = requests.get(url)
-    soup = BeautifulSoup(r.text)
+    soup = BeautifulSoup(r.text, "html.parser")
     title = soup.title.text.strip()
     content = soup.select('div > p')[0].text
     content = re.sub('\'','\\\'',re.sub('\\n','',re.sub('\[.*?\]','',content)))
     if content == 'Other reasons this message may be displayed:':
-        self.PRIVMSG(Log['context'],'Wikipedia 03%s – 12No article found. Maybe you could write it: 11https://en.wikipedia.org/w/index.php?title=Special:UserLogin&returnto=%s' % (title, search))
+        self.PRIVMSG(line['context'],'Wikipedia 03%s – 12No article found. Maybe you could write it: 11https://en.wikipedia.org/w/index.php?title=Special:Userlinein&returnto=%s' % (title, search))
     else:
         if 'may refer to:' in content:
             r = requests.get('http://en.wikipedia.org%s' % soup.find('ul').find('li').find('a')['href'])
-            soup = BeautifulSoup(r.text)
+            soup = BeautifulSoup(r.text,  "html.parser")
             title = soup.title.text
             content = soup.select('div > p')[0].text
             content = re.sub('\'','\\\'',re.sub('\\n','',re.sub('\[.*?\]','',content)))
         exerpt = '. '.join(content.split('. ')[:1])
         if not exerpt[-1] in '!?.':
             exerpt = exerpt + '.'
-        self.PRIVMSG(Log['context'],'Wikipedia 03%s – 12%s 11( %s )' % (title, exerpt, r.url))
-commands['!wiki'] = wiki
+        self.PRIVMSG(line['context'],'Wikipedia 03%s – 12%s 11( %s )' % (title, exerpt, r.url))
+commands['wiki'] = wiki
 
-def help_(self,Log):
-    self.PRIVMSG(Log['context'],'My commands are: %s' % (' '.join(commands)))
-commands['!help'] = help_
+def help_(self,line):
+    self.PRIVMSG(line['context'],'My commands are: %s' % (' '.join(commands)))
+commands['help'] = help_
 
-def about(self,Log):
+def about(self,line):
     try:
         with open('about.txt', 'r') as file:
-            self.PRIVMSG(Log['context'],file.readline())
+            self.PRIVMSG(line['context'],file.readline())
     except:
         with open('about.txt', 'w+') as file:
-            file.write('Hi, I\'m an IRC bot written by NewellWorldOrder/nwo')
-commands['!about'] = about
+            file.write('Hi, I\'m an IRC bot')
+commands['about'] = about
 
-def list_(self, Log):
-    if Log['host'] in self.info['OWNER'] + self.info['SUDOER']:
+def list_(self, line):
+    if line['host'] in self.info['OWNER'] + self.info['SUDOER']:
         try:
             changed = []
-            if Log['trail'][2].lower() == 'add':
-                for item in Log['trail'][3:]:
-                    if item not in self.info[Log['trail'][1].upper()]:
-                        self.info[Log['trail'][1].upper()].append(item)
+            if line['trail'][2].lower() == 'add':
+                for item in line['trail'][3:]:
+                    if item not in self.info[line['trail'][1].upper()]:
+                        self.info[line['trail'][1].upper()].append(item)
                         changed.append(item)
-                        if Log['trail'][1].upper() == 'CHAN':
+                        if line['trail'][1].upper() == 'CHAN':
                             self.ircSend('JOIN %s' % item)
                 if len(changed) > 0:
-                    self.ircSend('NOTICE %s :%s added to list: %s' % (Log['nick'], str(changed).strip('[]'), Log['trail'][1].upper()))
+                    self.ircSend('NOTICE %s :%s added to list: %s' % (line['nick'], str(changed).strip('[]'), line['trail'][1].upper()))
                 else:
-                    self.ircSend('NOTICE %s :Nothing was added to list: %s' % (Log['nick'], Log['trail'][1].upper()))
-            elif Log['trail'][2].lower() == 'remove':
-                for item in Log['trail'][3:]:
-                    if item in self.info[Log['trail'][1].upper()]:
-                        self.info[Log['trail'][1].upper()].remove(item)
+                    self.ircSend('NOTICE %s :Nothing was added to list: %s' % (line['nick'], line['trail'][1].upper()))
+            elif line['trail'][2].lower() == 'remove':
+                for item in line['trail'][3:]:
+                    if item in self.info[line['trail'][1].upper()]:
+                        self.info[line['trail'][1].upper()].remove(item)
                         changed.append(item)
-                        if Log['trail'][1].upper() == 'CHAN':
+                        if line['trail'][1].upper() == 'CHAN':
                             self.ircSend('PART %s' % item)
                 if len(changed) > 0:
-                    self.ircSend('NOTICE %s :%s removed from list: %s' % (Log['nick'], str(changed).strip('[]'), Log['trail'][1].upper()))
+                    self.ircSend('NOTICE %s :%s removed from list: %s' % (line['nick'], str(changed).strip('[]'), line['trail'][1].upper()))
                 else:
-                    self.ircSend('NOTICE %s :Nothing was removed from list: %s' % (Log['nick'], Log['trail'][1].upper()))
+                    self.ircSend('NOTICE %s :Nothing was removed from list: %s' % (line['nick'], line['trail'][1].upper()))
             self.updateFile()
         except KeyError:
-            self.ircSend('NOTICE %s :Command invalid, please use !list <list> <add/remove> <items>' % Log['nick'])
+            self.ircSend('NOTICE %s :Command invalid, please use !list <list> <add/remove> <items>' % line['nick'])
     else:
-        self.ircSend('NOTICE %s :You are not authorized to perform that command' % Log['nick'])
-commands['!list'] = list_
+        self.ircSend('NOTICE %s :You are not authorized to perform that command' % line['nick'])
+commands['list'] = list_
 
-def Handler(self,Log):
-    if Log['nick'].lower() not in [x.lower() for x in self.info['IGNORE']] and Log['trail'][0].lower() in commands.keys():
-        try:
-            commands[Log['trail'][0].lower()](self,Log)
-        except IndexError:
-            self.ircSend('NOTICE %s :Invalid input for $s' % (Log['nick'],Log['trail'][0].lower()))
+def Handler(self,line):
+    try:
+        if line['trail'][0][0] == '@' and line['trail'][0].lower()[1:] in commands:
+            commands[line['trail'][0][1:].lower()](self,line)
+        elif line['trail'][0][0] == '@':
+            self.PRIVMSG(line['context'], 'Error: Let\'s dispel once and for all with this fiction that Barack Obama doesn\'t know what he\'s doing. He knows exactly what he\'s doing. (command not recognized)')
+    except IndexError:
+        self.ircSend('NOTICE %s :Invalid input for $s' % (line['nick'],line['trail'][0]))

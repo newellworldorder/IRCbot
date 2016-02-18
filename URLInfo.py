@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# coding=utf8
 
 from bs4 import BeautifulSoup
 import requests
@@ -17,7 +17,7 @@ def youtubeKey():
             file.write('# Insert your YouTube API key below')
         return None
 
-def youtube(self,Log,url):
+def youtube(self,line,url):
     if 'youtube.com/' in url or 'youtu.be/' in url:
         vidID = url.split('youtu.be/')[-1].split('v=')[-1].split('youtube.com/v/')[-1].split('#')[0].split('&')[0].split('?')[0]
         try:
@@ -33,46 +33,37 @@ def youtube(self,Log,url):
                 bar = '12' + str(likes) + ' ' + '—' * round(likes*10/votes) + '15' + '—' * round(dislikes*10/votes) + ' ' + str(dislikes)
             else:
                 bar = ''
-            self.PRIVMSG(Log['context'],'You00,04Tube %s 14uploaded by %s – %s' % (title, channel, bar))
+            self.PRIVMSG(line['context'],'You00,04Tube %s 14uploaded by %s – %s' % (title, channel, bar))
         except Exception as e:
             print(e)
 sites['youtu.be/'] = youtube
 sites['youtube.com/'] = youtube
 
-def massdrop(self,Log,url):
+def massdrop(self,line,url):
     if not '?mode=guest_open' in url:
         url = url + '?mode=guest_open'
-    try:
-        r = requests.get(url)
-        soup = BeautifulSoup(r.text)
-        title = soup.title.text.strip()
-        cprice = soup.find(class_="current-price")
-        mrsp = cprice.next_sibling.next_sibling.next_sibling.next_sibling
-        tRem = soup.find(class_="item-time").text
-        self.PRIVMSG(Log['context'],'Massdrop 02%s – 03Price: %s – 10MRSP: %s – 07%s 12( %s )' % (title, cprice.text, mrsp.text[5:], tRem, url))
-    except Exception as e:
-        print(e)
+    basic(self,line,url)
 sites['massdrop.com/'] = massdrop
 
-def basic(self,Log,url):
+def basic(self,line,url):
     try:
         r = requests.get(url, timeout=2)
-        soup = BeautifulSoup(r.text)
+        soup = BeautifulSoup(r.text, "html.parser")
         title = soup.title.text.strip()
         if title:
-            self.PRIVMSG(Log['context'],'03%s 09( %s )' % (title, url))
+            self.PRIVMSG(line['context'],'03%s 09( %s )' % (title, url))
     except Exception as e:
         print(e)
 
-def Handler(self,Log):
-    if Log['nick'] not in self.info['IGNORE'] and ('http://' in Log['line'] or 'https://' in Log['line']):
-        for w in Log['trail']:
-            if 'http' in w and '://' in w:
+def Handler(self,line):
+    if 'http' in ''.join(line['trail']):
+        for w in line['trail']:
+            if w[:4] == 'http' and '://' in w:
                 found = False
                 for site in sites.keys():
                     if site in w:
-                        sites[site](self,Log,w)
+                        sites[site](self,line,w)
                         found = True
                         break
                 if not found:
-                    basic(self,Log,w)
+                    basic(self,line,w)

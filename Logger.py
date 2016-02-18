@@ -1,48 +1,42 @@
-# -*- coding: utf-8 -*-
+# coding=utf8
 
 import time
 
-def interpret(line):
+def interpret(info, raw):
     t = time.time()
-    Log = {}
-    Log['line'] = line
-    Log['time'] = t
-    Log['vTime'] = time.strftime("%H:%M:%S",time.gmtime(t))
-    Log['nick'] = None
-    Log['ident'] = None
-    Log['host'] = None
-    Log['command'] = None
-    Log['parameters'] = []
-    Log['trail'] = []
-    words = str(line).split()
-    if line[0] == ':':
+    line = {'time':t,'nick':None,'ident':None,'host':None,'command':None,'parameters':[],'trail':[]}
+    words = str(raw).split()
+    if raw[0] == ':':
         prefix = words.pop(0)[1:]
         if '!' in prefix and '@' in prefix:
-            Log['nick'] = prefix.split('!')[0]
-            Log['ident'] = prefix.split('!')[1].split('@')[0]
-            Log['host'] = prefix.split('@')[1]
+            line['nick'] = prefix.split('!')[0]
+            line['ident'] = prefix.split('!')[1].split('@')[0]
+            line['host'] = prefix.split('@')[1]
     if len(words) > 0:
-        Log['command'] = words.pop(0)
+        line['command'] = words.pop(0)
         for i in range(len(words)):
             if words[0][0] == ':':
                 break
-            Log['parameters'].append(words.pop(0))
+            line['parameters'].append(words.pop(0))
 
     if words:
-        words[0] = words[0].lstrip(':+-')
-        Log['trail'] = ' '.join(words).split()
-    if Log['parameters']:
-        Log['context'] = Log['parameters'][0]
+        words[0] = words[0][1:]
+        line['trail'] = ' '.join(words).split()
 
-    print('%s %s' % (Log['vTime'], Log['line']))
+    if line['parameters']:
+        line['context'] = line['parameters'][0]
+        if line['context'] == info['NICK']:
+            line['context'] = line['nick']
 
-    return Log
+    print('%s %s' % (time.strftime("%H:%M:%S",time.gmtime(t)), raw))
+
+    return line
 
 def listActive(self, channel, timer = 10):
     t = time.time()
     activeList = []
     for nick in self.lastSeen[channel]:
-        if type(nick) is str or not(nick['lastMessage']) or nick.lower() == caller.lower():
+        if type(nick) is str or not(nick['lastMessage']):
             continue
         if nick['lastAction'][1] == 'talk' or nick['lastAction'][1] == 'join':
             if nick['lastMessage'][0] < t - (timer * 60):
