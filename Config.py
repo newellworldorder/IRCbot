@@ -30,6 +30,7 @@ def setup():
         conf['NAME'] = input("Enter the realname that the bot should have: ")
         conf['CHAN'] = input("Enter the channels that the bot should join (comma separated): ").split(',')
         conf['IGNORE'] = input("Enter the nicks that the bot should ignore (comma separated): ").split(',')
+        conf['IGNOREHOST'] = input("Enter the hosts that the bot should ignore (comma separated): ").split(',')
         conf['OWNER'] = input("Enter the hosts of the owner(s) (comma separated): ").split(',')
         conf['SUDOER'] = input("Enter the hosts to receive extra privileges (comma separated): ").split(',')
         confirm = input("\n Confirm? y/N: ")
