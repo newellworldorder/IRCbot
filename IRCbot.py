@@ -1,18 +1,16 @@
 # coding=utf8
 
-from bs4 import BeautifulSoup
-from operator import itemgetter
-import base64, Commands, Config, importlib, Logger, praw, re, requests, socket, ssl, sys, time, types, URLInfo
+import base64, Commands, Config, importlib, Logger, socket, ssl, sys, time, Tracker, types, URLInfo
 
 class IRC:
     def __init__(self):
         Config.config(self)
-
+        self.authed = False
+        self.commandLog = []
         # lastSeen is a dict of dicts. The first level is channels, then nicks, then [time,lastAction,lastMessage]
         for channel in self.info['CHAN']:
             if channel not in self.lastSeen:
                 self.lastSeen[channel] = {}
-        Commands.redditAPI(self)
         self.Connect()
         self.Main()
 
@@ -74,8 +72,9 @@ class IRC:
                     if len(line['trail']) > 3:
                         if 'registered' in line['trail'][3]:
                             self.ircSend('PRIVMSG NickServ :identify %s' % self.info['PASS'])
+                            self.authed = True;
                             continue
-                        if line['trail'][3] == 'identified':
+                        if self.authed == True:
                             self.ircSend('JOIN %s' % ','.join(self.info['CHAN']))
                             continue
 
@@ -86,40 +85,7 @@ class IRC:
                         self.updateFile()
                         self.ircSend('JOIN %s' % line['trail'][0])
 
-                # checks nick change
-                if line['command'] == 'NICK':
-                    if line['nick'] == self.info['NICK']:
-                        self.info['NICK'] = line['trail'][0]
-                    else:
-                        for channel in self.info['CHAN']:
-                            if line['nick'] in self.lastSeen[channel]:
-                                self.lastSeen[channel][line['trail'][0]] = self.lastSeen[channel][line['nick']]
-                                self.lastSeen[channel][line['nick']] = line['trail'][0]
-                        self.updateLastSeen()
-                    continue
-
-
-                # checks channel join
-                if line['command'] == 'JOIN':
-                    if line['parameters'] and line['nick'] != self.info['NICK']:
-                        self.lastSeen[line['context']][line['nick']]['lastAction'] = [line['time'], 'join']
-                        if line['nick'] not in self.lastSeen[line['context']]:
-                            self.lastSeen[line['context']][line['nick']]['lastMessage'] = None
-                        self.updateLastSeen()
-                    continue
-
-                # updates active list if user leaves
-                if line['command'] == 'PART':
-                    if line['nick'] in self.lastSeen[line['context']]:
-                        self.lastSeen[line['context']][line['nick']]['lastAction'] = [line['time'], 'leav', ' '.join(line['trail'])]
-                    self.updateLastSeen()
-                    continue
-
-                if line['command'] == 'QUIT':
-                    for channel in self.info['CHAN']:
-                        if line['nick'] in self.lastSeen[channel]:
-                            self.lastSeen[line['context']][line['nick']]['lastAction'] = [line['time'], 'quitt', ' '.join(line['trail'])]
-                    self.updateLastSeen()
+                if Tracker.Handler(self, line):
                     continue
 
                 # checks when PRIVMSG received
@@ -131,10 +97,7 @@ class IRC:
                     # builds last spoke list
                     if line['context'] not in self.lastSeen:
                         self.lastSeen[line['context']] = {}
-                    if line['nick'] not in self.lastSeen[line['context']]:
-                        self.lastSeen[line['context']][line['nick']] = {}
-                    self.lastSeen[line['context']][line['nick']]['lastAction'] = [line['time'], 'talk']
-                    self.lastSeen[line['context']][line['nick']]['lastMessage'] = [line['time'], ' '.join(line['trail'])]
+                    self.lastSeen[line['context']][line['nick']] = [line['time'], 'talk', ' '.join(line['trail']).encode('utf-8')]
                     self.updateLastSeen()
 
                     try:
@@ -143,14 +106,14 @@ class IRC:
                                 for name, val in globals().items():
                                     if isinstance(val, types.ModuleType):
                                         yield val.__name__
-                            if line['trail'][0] == '!do':
+                            if line['trail'][0] == '@reload' and line['trail'][1] in list(imports()):
+                                importlib.reload(sys.modules[line['trail'][1]])
+                            if line['trail'][0] == '@do':
                                 self.ircSend(' '.join(line['trail'][1:]))
-                            if line['trail'][0] == '!quit':
+                            if line['trail'][0] == '@quit':
                                 self.ircSend('QUIT')
                                 self.irc.close()
                                 sys.exit('User exited')
-                            if line['trail'][0] == '!reload' and line['trail'][1] in list(imports()):
-                                importlib.reload(sys.modules[line['trail'][1]])
 
                         if line['nick'].lower() not in [x.lower() for x in self.info['IGNORE']]:
                             Commands.Handler(self, line)
@@ -175,9 +138,6 @@ class IRC:
         if self.lastSeen != oldSeen:
             with open('lastseen.txt', 'w+') as file:
                 file.write(str(self.lastSeen))
-
-    def listActive(self, channel, timer = 10):
-        return lineger.listActive(self, channel, timer)
 
     def PRIVMSG(self, context, message):
         self.ircSend('PRIVMSG %s :%s' % (context, message))
