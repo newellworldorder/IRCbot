@@ -27,18 +27,9 @@ def interpret(info, raw):
         line['context'] = line['parameters'][0]
         if line['context'] == info['NICK']:
             line['context'] = line['nick']
+    if line['command'] == 'JOIN':
+        line['context'] = line['trail'][0]
 
     print('%s %s' % (time.strftime("%H:%M:%S",time.gmtime(t)), raw))
 
     return line
-
-def listActive(self, channel, timer = 10):
-    t = time.time()
-    activeList = []
-    for nick in self.lastSeen[channel]:
-        if type(nick) is str or not(nick['lastMessage']):
-            continue
-        if nick['lastAction'][1] == 'talk' or nick['lastAction'][1] == 'join':
-            if nick['lastMessage'][0] < t - (timer * 60):
-                activeList.append(nick)
-    return activeList
